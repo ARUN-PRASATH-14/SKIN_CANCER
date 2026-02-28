@@ -28,7 +28,7 @@ output = Dense(7, activation="softmax")(x)
 model = Model(inputs=base_model.input, outputs=output)
 
 # Load trained weights
-model.load_weights("skin_weights.h5")
+model.load_weights("skin_models.weights.h5")
 #model = tf.keras.models.load_model("skin_cancer_model.keras", compile=False)
 
 # ===============================
