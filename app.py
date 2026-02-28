@@ -8,7 +8,7 @@ from PIL import Image
 # ===============================
 # LOAD MODEL
 # ===============================
-model = tf.keras.models.load_model("best_model.h5", compile=False)
+model = tf.keras.models.load_model("skin_cancer_model.keras", compile=False)
 
 # ===============================
 # CLASS NAMES
