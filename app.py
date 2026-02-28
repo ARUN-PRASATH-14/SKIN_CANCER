@@ -8,7 +8,28 @@ from PIL import Image
 # ===============================
 # LOAD MODEL
 # ===============================
-model = tf.keras.models.load_model("skin_cancer_model.keras", compile=False)
+import tensorflow as tf
+from tensorflow.keras.applications import EfficientNetB3
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dropout, Dense
+from tensorflow.keras.models import Model
+
+# Build base model
+base_model = EfficientNetB3(
+    weights=None,
+    include_top=False,
+    input_shape=(224, 224, 3)
+)
+
+x = base_model.output
+x = GlobalAveragePooling2D()(x)
+x = Dropout(0.5)(x)
+output = Dense(7, activation="softmax")(x)
+
+model = Model(inputs=base_model.input, outputs=output)
+
+# Load trained weights
+model.load_weights("skin_weights.h5")
+#model = tf.keras.models.load_model("skin_cancer_model.keras", compile=False)
 
 # ===============================
 # CLASS NAMES
