@@ -1,46 +1,28 @@
 import streamlit as st
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.applications.efficientnet import preprocess_input
-from tensorflow.keras.preprocessing import image
 from PIL import Image
 
+st.set_page_config(page_title="Skin Cancer Detection", layout="centered")
+
+st.title("🩺 Skin Cancer Detection System")
+st.write("Upload a skin image to detect skin type and cancer status.")
+
 # ===============================
-# LOAD MODEL
+# LOAD TFLITE MODEL
 # ===============================
+interpreter = tf.lite.Interpreter(model_path="skin_cancer_model.tflite")
+interpreter.allocate_tensors()
 
-import tensorflow as tf
-
-model = tf.keras.models.load_model("skin_cancer_model.keras", compile=False)
-# import tensorflow as tf
-# from tensorflow.keras.applications import EfficientNetB3
-# from tensorflow.keras.layers import GlobalAveragePooling2D, Dropout, Dense
-# from tensorflow.keras.models import Model
-
-# # Build base model
-# base_model = EfficientNetB3(
-#     weights=None,
-#     include_top=False,
-#     input_shape=(224, 224, 3)
-# )
-
-# x = base_model.output
-# x = GlobalAveragePooling2D()(x)
-# x = Dropout(0.5)(x)
-# output = Dense(7, activation="softmax")(x)
-
-# model = Model(inputs=base_model.input, outputs=output)
-
-# # Load trained weights
-# model.load_weights("skin_models.weights.h5")
-#model = tf.keras.models.load_model("skin_cancer_model.keras", compile=False)
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
 
 # ===============================
 # CLASS NAMES
 # ===============================
 class_names = [
     "Actinic Keratosis",
-    "Basal Cell Carcinoma",
+    "Basal Cell Carcinoma (BCC)",
     "Benign Keratosis",
     "Dermatofibroma",
     "Melanoma",
@@ -51,43 +33,69 @@ class_names = [
 cancer_classes = [0, 1, 4]  # AKIEC, BCC, MEL
 
 # ===============================
-# STREAMLIT UI
+# IMAGE UPLOAD
 # ===============================
-st.title("🧬 AI Skin Cancer Detection System")
-st.write("Upload a dermoscopy skin image for analysis")
-
-uploaded_file = st.file_uploader("Choose a skin image...", type=["jpg", "png", "jpeg"])
+uploaded_file = st.file_uploader("Upload Image", type=["jpg", "png", "jpeg"])
 
 if uploaded_file is not None:
 
-    img = Image.open(uploaded_file).convert("RGB")
-    st.image(img, caption="Uploaded Image", use_column_width=True)
+    image = Image.open(uploaded_file).convert("RGB")
+    st.image(image, caption="Uploaded Image", use_column_width=True)
 
-    # Preprocess
-    img_resized = img.resize((224, 224))
-    arr = np.array(img_resized)
-    arr = preprocess_input(arr)
-    arr = np.expand_dims(arr, axis=0)
+    # Resize to 224x224 (IMPORTANT)
+    image = image.resize((224, 224))
+    img_array = np.array(image).astype(np.float32)
 
-    # Prediction
-    pred = model.predict(arr)
-    class_index = np.argmax(pred)
-    confidence = float(np.max(pred)) * 100
+    # Normalize if your model used EfficientNet preprocessing
+    img_array = img_array / 255.0
+
+    img_array = np.expand_dims(img_array, axis=0)
+
+    # ===============================
+    # PREDICTION
+    # ===============================
+    interpreter.set_tensor(input_details[0]['index'], img_array)
+    interpreter.invoke()
+    prediction = interpreter.get_tensor(output_details[0]['index'])
+
+    class_index = np.argmax(prediction)
+    confidence = float(np.max(prediction)) * 100
 
     skin_type = class_names[class_index]
 
-    st.subheader("🔍 Prediction Result")
-
-    # Low confidence warning
-    if confidence < 50:
-        st.warning("⚠ Low Confidence Prediction — Image may not match training data")
-
-    # Cancer logic
+    # Cancer or Not
     if class_index in cancer_classes:
-        st.error("⚠ Cancer Detected")
-        st.write("### Cancer Type:", skin_type)
+        status = "⚠ Cancer Detected"
+        cancer_type = skin_type
     else:
-        st.success("✅ Non-Cancerous")
-        st.write("### Skin Type:", skin_type)
+        status = "✅ Non-Cancerous"
+        cancer_type = "None"
 
-    st.write(f"### Confidence: {confidence:.2f}%")
+    # ===============================
+    # OUTPUT
+    # ===============================
+    st.subheader("🔍 Detection Result")
+
+    st.write("### 🧬 Skin Type:")
+    st.success(skin_type)
+
+    st.write("### 🏥 Cancer Status:")
+    if status == "⚠ Cancer Detected":
+        st.error(status)
+        st.write("### Cancer Type:")
+        st.warning(cancer_type)
+    else:
+        st.success(status)
+
+    st.write("### 📊 Confidence:")
+    st.info(f"{confidence:.2f}%")
+
+    st.progress(min(int(confidence), 100))
+
+    # Extra verification message
+    if class_index == 1:
+        st.write("✔ This image is detected as Basal Cell Carcinoma (BCC)")
+    elif class_index == 6:
+        st.write("✔ This image is detected as Vascular Lesion")
+    elif class_index == 5:
+        st.write("✔ This image is detected as Normal Skin (Melanocytic Nevus)")
